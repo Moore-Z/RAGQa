@@ -34,23 +34,23 @@ def openAIEmbedding():
     embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
     return embeddings
 
-def indexingRetrieval(text: str, embeddings):
-    vectorstore = InMemoryVectorStore.from_texts(
-        [text],
-        embedding=embeddings,
-    )
-
 def add_to_chroma(chunks : list[Document], db:Chroma):
+    # Used for Checking whether chunk remained in same page
     last_page_id = None
+    # Used for Chunk id for chunks remain in same page
     current_chunk_index = 0
 
+    # Database Oprimization and Preparation
     existing_items = db.get(include=[])
+    # Get all Ids from Chroma Database
     existing_ids = set(existing_items["ids"])
+    # Print out Infomation
     print(f"Number of existing documents in DB: {len(existing_ids)}")
 
     chunks_with_ids = []
 
     for chunk in chunks:
+        # Chunk MetaData Important For Chunk Id
         source = chunk.metadata.get("source")
         page = chunk.metadata.get("page")+1
         current_page_id = f"{source}:{page}"
@@ -59,18 +59,25 @@ def add_to_chroma(chunks : list[Document], db:Chroma):
         if last_page_id == current_page_id:
             current_chunk_index += 1
         else:
+            # Initial chunk Index id To 0, New Chunk in this page
             current_chunk_index = 0
+            # Update page id to Current page
             last_page_id = current_page_id
+        # Full id (Unique) and add it to Meta data
         current_page_id = f"{current_page_id}:{current_chunk_index}"
         chunk.metadata['id'] = current_page_id
         chunks_with_ids.append(chunk)
 
+    # Gather Chunks for Adding to Database by checking whether having
+    # Existing Id
     new_chunks = []
     for chunk in chunks_with_ids:
         if chunk.metadata.get(id) not in existing_ids:
             new_chunks.append(chunk)
 
+    # Gather all Ids for new adding Chunks
     new_chunk_ids = [ chunk.metadata["id"] for chunk in new_chunks]
+    # Adding to Database
     db.add_documents(documents=new_chunks, ids=new_chunk_ids)
 
 
